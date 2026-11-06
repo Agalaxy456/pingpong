@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: pong-duel
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements2.txt"
+    startCommand: "python app2.py"
+    healthCheckPath: "/"

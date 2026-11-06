@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong Duel</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        h1 { font-size: 2rem; margin-bottom: 10px; }
+        #lobby { text-align: center; padding: 30px; }
+        #lobby input {
+            padding: 12px 20px;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 8px;
+            margin: 10px;
+            text-transform: uppercase;
+            width: 180px;
+            letter-spacing: 4px;
+        }
+        #lobby button {
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 8px;
+            background: #e94560;
+            color: #fff;
+            cursor: pointer;
+            margin: 5px;
+        }
+        #lobby button:hover { background: #c23152; }
+        #win-score-setting { margin: 15px 0; font-size: 1rem; }
+        #win-score-setting input {
+            width: 60px;
+            padding: 8px;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 6px;
+            text-align: center;
+        }
+        #game-area { display: none; text-align: center; }
+        #score-board {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        canvas {
+            border: 2px solid #e94560;
+            border-radius: 8px;
+            background: #16213e;
+            max-width: 100%;
+        }
+        #msg {
+            margin-top: 15px;
+            font-size: 1.1rem;
+            color: #e94560;
+            min-height: 30px;
+        }
+        .controls-hint { margin-top: 10px; font-size: 0.9rem; color: #aaa; }
+        #share-link {
+            margin-top: 15px;
+            padding: 10px 15px;
+            background: #0f3460;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            word-break: break-all;
+            display: none;
+        }
+        #rematch-btn {
+            display: none;
+            margin-top: 15px;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 8px;
+            background: #4ecdc4;
+            color: #1a1a2e;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #rematch-btn:hover { background: #3db8b0; }
+        #touch-controls {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            justify-content: space-between;
+            padding: 0 30px;
+        }
+        .touch-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 2px solid #e94560;
+            background: rgba(233,69,96,0.2);
+            color: #fff;
+            font-size: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .touch-btn:active { background: rgba(233,69,96,0.5); }
+    </style>
+</head>
+<body>
+    <h1>🏓 Pong Duel</h1>
+
+    <!-- LOBBY -->
+    <div id="lobby">
+        <p>Create a room and share the code with your friend!</p>
+        <div id="win-score-setting">
+            Win score: <input type="number" id="win-score" value="5" min="1" max="21">
+        </div>
+        <button onclick="createRoom()">Create Room</button>
+        <br><br>
+        <input type="text" id="join-code" placeholder="CODE" maxlength="4">
+        <button onclick="joinRoom()">Join</button>
+    </div>
+
+    <!-- GAME -->
+    <div id="game-area">
+        <div id="score-board">0 : 0</div>
+        <canvas id="canvas" width="800" height="500"></canvas>
+        <div id="msg"></div>
+        <div id="share-link"></div>
+        <button id="rematch-btn" onclick="doRematch()">🔄 Rematch</button>
+        <div class="controls-hint">
+            Player 1: <b>W / S</b> &nbsp;|&nbsp; Player 2: <b>↑ / ↓</b> &nbsp;|&nbsp; Mobile: touch buttons
+        </div>
+    </div>
+
+    <!-- MOBILE TOUCH -->
+    <div id="touch-controls">
+        <div class="touch-btn" id="btn-up">▲</div>
+        <div class="touch-btn" id="btn-down">▼</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        let roomCode = '';
+        let myPlayer = 0;
+        let canvas, ctx;
+        let gameState = null;
+
+        // --- SOUND ---
+        let audioCtx;
+        function getAudioCtx() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            return audioCtx;
+        }
+
+        function playSound(type) {
+            const ctx = getAudioCtx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            switch (type) {
+                case 'paddle':
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(440, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.1);
+                    break;
+                case 'wall':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(220, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.08);
+                    break;
+                case 'score':
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(330, ctx.currentTime);
+                    osc.frequency.setValueAtTime(220, ctx.currentTime + 0.1);
+                    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.3);
+                    break;
+                case 'win':
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(523, ctx.currentTime);
+                    osc.frequency.setValueAtTime(659, ctx.currentTime + 0.15);
+                    osc.frequency.setValueAtTime(784, ctx.currentTime + 0.3);
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.6);
+                    break;
+                case 'lose':
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(330, ctx.currentTime);
+                    osc.frequency.setValueAtTime(220, ctx.currentTime + 0.2);
+                    osc.frequency.setValueAtTime(110, ctx.currentTime + 0.4);
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.6);
+                    break;
+            }
+        }
+
+        // --- LOBBY ---
+        function createRoom() {
+            const winScore = parseInt(document.getElementById('win-score').value) || 5;
+            socket.emit('create_room', { win_score: winScore });
+        }
+
+        function joinRoom() {
+            const code = document.getElementById('join-code').value.trim().toUpperCase();
+            if (code.length === 4) socket.emit('join_room', { code });
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const joinParam = params.get('join');
+        if (joinParam) document.getElementById('join-code').value = joinParam.toUpperCase();
+
+        socket.on('room_created', (data) => {
+            roomCode = data.code;
+            myPlayer = data.player;
+            showGame();
+            const link = window.location.origin + '/?join=' + roomCode;
+            document.getElementById('share-link').textContent = 'Share: ' + link;
+            document.getElementById('share-link').style.display = 'block';
+            document.getElementById('msg').textContent = 'Waiting for opponent...';
+        });
+
+        socket.on('room_joined', (data) => {
+            roomCode = data.code;
+            myPlayer = data.player;
+            showGame();
+            document.getElementById('msg').textContent = 'Game starting!';
+        });
+
+        socket.on('game_start', () => {
+            document.getElementById('msg').textContent = 'GO!';
+            document.getElementById('rematch-btn').style.display = 'none';
+            if ('ontouchstart' in window)
+                document.getElementById('touch-controls').style.display = 'flex';
+        });
+
+        socket.on('game_state', (state) => {
+            gameState = state;
+            document.getElementById('score-board').textContent =
+                state.scores[0] + ' : ' + state.scores[1];
+            if (state.event) playSound(state.event);
+            draw();
+        });
+
+        socket.on('game_over', (data) => {
+            const iWon = data.winner === (myPlayer + 1);
+            const winText = iWon ? '🎉 YOU WIN!' : '😢 YOU LOSE';
+            document.getElementById('msg').textContent =
+                winText + '  Final: ' + data.scores[0] + ' - ' + data.scores[1];
+            document.getElementById('touch-controls').style.display = 'none';
+            document.getElementById('rematch-btn').style.display = 'inline-block';
+            playSound(iWon ? 'win' : 'lose');
+        });
+
+        socket.on('opponent_left', (data) => {
+            document.getElementById('msg').textContent = data.message;
+        });
+
+        socket.on('error', (data) => { alert(data.message); });
+
+        // --- REMATCH ---
+        function doRematch() {
+            socket.emit('rematch');
+        }
+
+        // --- RENDERING ---
+        function showGame() {
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('game-area').style.display = 'block';
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            draw();
+        }
+
+        function draw() {
+            if (!ctx) return;
+            ctx.clearRect(0, 0, 800, 500);
+            ctx.setLineDash([10, 10]);
+            ctx.strokeStyle = '#444';
+            ctx.beginPath();
+            ctx.moveTo(400, 0);
+            ctx.lineTo(400, 500);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            if (!gameState) return;
+
+            ctx.fillStyle = '#e94560';
+            const p1y = gameState.paddles[0] || 210;
+            const p2y = gameState.paddles[1] || 210;
+            ctx.fillRect(12, p1y, 12, 80);
+            ctx.fillRect(776, p2y, 12, 80);
+
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(gameState.ball.x, gameState.ball.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // --- KEYBOARD ---
+        document.addEventListener('keydown', (e) => {
+            if (!roomCode) return;
+            const k = e.key.toLowerCase();
+            if (myPlayer === 0) {
+                if (k === 'w') socket.emit('paddle_input', { room: roomCode, direction: 'up' });
+                if (k === 's') socket.emit('paddle_input', { room: roomCode, direction: 'down' });
+            }
+            if (myPlayer === 1) {
+                if (e.key === 'ArrowUp') socket.emit('paddle_input', { room: roomCode, direction: 'up' });
+                if (e.key === 'ArrowDown') socket.emit('paddle_input', { room: roomCode, direction: 'down' });
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (!roomCode) return;
+            const k = e.key.toLowerCase();
+            if (myPlayer === 0 && (k === 'w' || k === 's'))
+                socket.emit('paddle_input', { room: roomCode, direction: null });
+            if (myPlayer === 1 && (e.key === 'ArrowUp' || e.key === 'ArrowDown'))
+                socket.emit('paddle_input', { room: roomCode, direction: null });
+        });
+
+        // --- TOUCH ---
+        function touchHandler(btnId, direction) {
+            const btn = document.getElementById(btnId);
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (roomCode) socket.emit('paddle_input', { room: roomCode, direction });
+            });
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                if (roomCode) socket.emit('paddle_input', { room: roomCode, direction: null });
+            });
+        }
+        touchHandler('btn-up', 'up');
+        touchHandler('btn-down', 'down');
+    </script>
+</body>
+</html>   
