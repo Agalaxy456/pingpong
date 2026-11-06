@@ -5,7 +5,7 @@ import string
 import threading
 import os
 
-app = app = Flask(__name__, template_folder='templates2')
+app = Flask(__name__)
 app.config['SECRET_KEY'] = 'pong-secret-key'
 socketio = SocketIO(app, cors_allowed_origins='*')
 
