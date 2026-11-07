@@ -1,9 +1,10 @@
 from flask import Flask, render_template, request
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_socketio import SocketIO, emit, join_room
 import random
 import string
 import threading
 import os
+import time
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'pong-secret-key'
@@ -56,7 +57,7 @@ def index():
 @socketio.on('create_room')
 def on_create_room(data):
     win_score = int(data.get('win_score', 5))
-    win_score = max(1, min(win_score, 21))  # clamp 1–21
+    win_score = max(1, min(win_score, 21))
     code = make_code()
     with rooms_lock:
         rooms[code] = new_room(win_score)
@@ -129,7 +130,6 @@ def on_disconnect():
 
 def start_game_loop(code):
     def loop():
-        import time
         while True:
             with rooms_lock:
                 room = rooms.get(code)

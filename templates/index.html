@@ -118,7 +118,6 @@
 <body>
     <h1>🏓 Pong Duel</h1>
 
-    <!-- LOBBY -->
     <div id="lobby">
         <p>Create a room and share the code with your friend!</p>
         <div id="win-score-setting">
@@ -130,7 +129,6 @@
         <button onclick="joinRoom()">Join</button>
     </div>
 
-    <!-- GAME -->
     <div id="game-area">
         <div id="score-board">0 : 0</div>
         <canvas id="canvas" width="800" height="500"></canvas>
@@ -142,7 +140,6 @@
         </div>
     </div>
 
-    <!-- MOBILE TOUCH -->
     <div id="touch-controls">
         <div class="touch-btn" id="btn-up">▲</div>
         <div class="touch-btn" id="btn-down">▼</div>
@@ -156,7 +153,6 @@
         let canvas, ctx;
         let gameState = null;
 
-        // --- SOUND ---
         let audioCtx;
         function getAudioCtx() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -219,7 +215,6 @@
             }
         }
 
-        // --- LOBBY ---
         function createRoom() {
             const winScore = parseInt(document.getElementById('win-score').value) || 5;
             socket.emit('create_room', { win_score: winScore });
@@ -282,12 +277,10 @@
 
         socket.on('error', (data) => { alert(data.message); });
 
-        // --- REMATCH ---
         function doRematch() {
             socket.emit('rematch');
         }
 
-        // --- RENDERING ---
         function showGame() {
             document.getElementById('lobby').style.display = 'none';
             document.getElementById('game-area').style.display = 'block';
@@ -321,7 +314,6 @@
             ctx.fill();
         }
 
-        // --- KEYBOARD ---
         document.addEventListener('keydown', (e) => {
             if (!roomCode) return;
             const k = e.key.toLowerCase();
@@ -344,7 +336,6 @@
                 socket.emit('paddle_input', { room: roomCode, direction: null });
         });
 
-        // --- TOUCH ---
         function touchHandler(btnId, direction) {
             const btn = document.getElementById(btnId);
             btn.addEventListener('touchstart', (e) => {

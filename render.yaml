@@ -5,4 +5,4 @@ services:
     plan: free
     buildCommand: "pip install -r requirements2.txt"
     startCommand: "python app2.py"
-    healthCheckPath: "/"
+    healthCheckPath: "/"   
